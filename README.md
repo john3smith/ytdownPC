@@ -1,5 +1,12 @@
 # YTDownPC — Windows 영상 다운로드 프로그램
 
+## HTML 사용 설명서
+
+[기능 소개 · 설치 · 사용법 · 문제 해결 (HTML)](docs/user-guide.html)
+
+HTML 파일을 다운로드한 뒤 브라우저에서 열어 주세요. GitHub 파일 화면에서는 소스가 보일 수 있습니다.
+설명서 기준 버전과 설치 APK/EXE·Release 버전은 다를 수 있으므로 문서의 버전 안내를 확인하세요.
+
 YouTube, Instagram, X/Twitter의 **공개 영상 링크를 PC에 저장**하는 Windows 프로그램입니다. 그래픽 화면, 명령행, 로컬 MCP 인터페이스를 제공합니다. Android용 [ytdownForAND](https://github.com/john3smith/ytdownForAND)와는 별도 프로젝트입니다.
 
 ## 주요 기능
