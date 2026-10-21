@@ -36,7 +36,7 @@ class BridgeTests(unittest.TestCase):
                     await session.initialize()
                     tools = await session.list_tools()
                     names = {tool.name for tool in tools.tools}
-                    self.assertEqual(names, {"video_info", "start_download", "download_status"})
+                    self.assertEqual(names, {"video_info", "start_download", "download_status", "cancel_download"})
 
         asyncio.run(check())
 

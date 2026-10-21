@@ -1,0 +1,121 @@
+[
+  {
+    "name": "PySide6",
+    "version": "6.12.0",
+    "license": "LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only",
+    "notices": [
+      "PySide6-LicenseRef-Qt-Commercial.txt"
+    ]
+  },
+  {
+    "name": "PySide6_Essentials",
+    "version": "6.12.0",
+    "license": "LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only",
+    "notices": [
+      "PySide6_Essentials-LicenseRef-Qt-Commercial.txt"
+    ]
+  },
+  {
+    "name": "PySide6_Addons",
+    "version": "6.12.0",
+    "license": "LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only",
+    "notices": [
+      "PySide6_Addons-LicenseRef-Qt-Commercial.txt"
+    ]
+  },
+  {
+    "name": "PySide6_WebEngine",
+    "version": "6.12.0.140",
+    "license": "LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only",
+    "notices": [
+      "PySide6_WebEngine-LicenseRef-Qt-Commercial.txt"
+    ]
+  },
+  {
+    "name": "PySide6_Pdf",
+    "version": "6.12.0.140",
+    "license": "LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only",
+    "notices": [
+      "PySide6_Pdf-LicenseRef-Qt-Commercial.txt"
+    ]
+  },
+  {
+    "name": "shiboken6",
+    "version": "6.12.0",
+    "license": "LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only",
+    "notices": [
+      "shiboken6-LicenseRef-Qt-Commercial.txt"
+    ]
+  },
+  {
+    "name": "yt-dlp",
+    "version": "2026.8.19",
+    "license": "Unlicense",
+    "notices": [
+      "yt-dlp-LICENSE"
+    ]
+  },
+  {
+    "name": "yt-dlp-ejs",
+    "version": "0.8.0",
+    "license": "Unlicense AND MIT AND ISC",
+    "notices": [
+      "yt-dlp-ejs-LICENSE"
+    ]
+  },
+  {
+    "name": "curl_cffi",
+    "version": "0.16.3",
+    "license": "MIT",
+    "notices": [
+      "curl-cffi-LICENSE"
+    ]
+  },
+  {
+    "name": "pillow",
+    "version": "13.0.0",
+    "license": "MIT-CMU",
+    "notices": [
+      "Pillow-LICENSE"
+    ]
+  },
+  {
+    "name": "certifi",
+    "version": "2026.10.19",
+    "license": "MPL-2.0",
+    "notices": [
+      "certifi-LICENSE"
+    ]
+  },
+  {
+    "name": "cffi",
+    "version": "2.1.1",
+    "license": "MIT-0",
+    "notices": [
+      "cffi-LICENSE"
+    ]
+  },
+  {
+    "name": "pywin32",
+    "version": "312",
+    "license": "PSF",
+    "notices": [
+      "pywin32-license.txt",
+      "pywin32-License.txt",
+      "pywin32-LICENSE",
+      "pywin32-README.txt",
+      "pywin32-License.txt",
+      "pywin32-License.txt",
+      "pywin32-LICENSE.txt",
+      "pywin32-License.txt"
+    ]
+  },
+  {
+    "name": "pyinstaller",
+    "version": "6.22.2",
+    "license": "GPLv2-or-later with a special exception which allows to use PyInstaller to build and distribute non-free programs (including commercial ones)",
+    "notices": [
+      "pyinstaller-COPYING.txt"
+    ]
+  }
+]

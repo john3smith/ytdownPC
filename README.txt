@@ -1,41 +1,35 @@
-YTDownPC
-========
+YTDownPC 1.1.0 — Windows 영상·사진·음원 다운로드
 
-현재 버전
-  1.0.0
+배포 ZIP을 새 폴더에 풀고 YTDownPC-v1.1.0.exe를 실행하세요.
+EXE와 _internal 폴더를 함께 유지해야 합니다. 이전 버전 파일을 지우지 않아도 됩니다.
+다운로드한 ZIP은 실행 전에 모두 압축을 풀어 주세요.
 
-실행
-  YTDownPC.cmd 파일을 더블클릭합니다.
+영상: 링크 → 화질/폴더 → 다운로드. 실행 중에는 뒤에 대기합니다.
+음원: 음원만 추출(M4A)을 켭니다. 등록한 작업은 당시 설정을 유지합니다.
+붙여넣기·드롭: 바로 다운로드 설정이 ON이면 등록합니다. OFF이면 주소만 채웁니다.
+취소: 대기열에서 개별 취소하거나 전체 취소를 1초 안에 두 번 누릅니다.
+로그인: 사이트를 고르고 로그인/웹페이지에서 직접 로그인합니다.
+계정 전체: X·Instagram 프로필 또는 게시물 주소 → 계정 전체 미디어 → 검색 창에서 로그인/확인을 직접 진행 → 계정 검색 시작.
+끝 페이지 확인에 실패하면 부분 목록을 전체 결과로 처리하지 않습니다.
+현재 웹페이지 보기: HTTPS 페이지를 열며 다운로드를 등록하지 않습니다.
+Wi-Fi에서만 시작: 시작 시점에 적용하며 진행 중 Wi-Fi가 끊겨도 자동 취소하지 않습니다.
+미완료 파일: 저장 폴더의 .ytdownpc-parts에 있는 확인 가능한 .part/.part-Frag숫자/.ytdl만 조회·확인 삭제합니다.
+완료 미디어, 다른 폴더, 로그인 데이터는 정리 대상이 아닙니다.
 
-EXE 빌드
-  build-exe.cmd 파일을 실행합니다.
-  version_info.py의 APP_VERSION을 올리면 GUI 제목과 EXE 파일명에 함께 반영됩니다.
-  결과 파일: dist\YTDownPC-v<버전>.exe
+처음 다운로드할 때 인터넷이 필요합니다. 최신 stable yt-dlp와 FFmpeg를 공식 배포 경로에서 확인/준비합니다.
+yt-dlp와 FFmpeg 다운로드는 SHA-256을 검증하며 실패 시 오류를 표시하거나 검증된 기존 yt-dlp를 유지합니다.
+프로그램 설정과 앱 전용 브라우저 세션은 %LOCALAPPDATA%\YTDownPC에 저장합니다.
+기존 Chrome/EGO 로그인은 가져오지 않습니다. 인증서 오류·보안 확인을 건너뛰지 않습니다.
+브라우저 세션 전달 파일은 Windows DPAPI로 보호하며 로그에 쿠키·인증정보를 출력하지 않습니다.
+창을 닫을 때 작업이 남아 있으면 백그라운드 유지 또는 취소 종료를 고를 수 있습니다.
+강제 종료 후 대기열 자동 복원은 지원하지 않습니다.
 
-사용 설명서
-  최신 기능과 사용 방법은 README.md를 참고하세요.
+검증: 공개 YouTube MP4(720p)·M4A 저장 완료. 사진은 합성 원본 바이트/형식 검증과 추출기 fixture로 확인했습니다.
+실제 X·Instagram 로그인 계정의 전체 수집과 사이트별 최신 인증 화면은 미검증입니다. 사이트 변경/권한/접근 제한으로 실패할 수 있습니다.
+HTTPS 연결 보조는 PC의 curl 기반 통신이며 Android 전용 TLS 릴레이와 구현이 다릅니다. 인증서 검증은 유지합니다.
+DRM·유료·권한 없는 콘텐츠의 보호를 우회하지 않습니다. 본인이 보유하거나 저장 허가를 받은 자료에 사용하세요.
 
-저장 위치
-  기본 폴더: 현재 Windows 사용자의 다운로드 폴더
-
-지원 범위
-  공개 YouTube, Instagram, X/Twitter 영상과 종료된 공개 YouTube 라이브를 다운로드합니다.
-  DRM, 유료, 비공개 또는 별도 로그인이 필요한 영상은 지원하지 않습니다.
-
-자동 실행
-  앱이나 MCP 서버를 여는 것만으로 특정 영상 다운로드를 시작하지 않습니다.
-  외부 감시 프로그램의 자동 다운로드 연동은 별도 설정이며 기본 기능이 아닙니다.
-
-구성
-  ytdownpc.py          : GUI 및 명령행 프로그램
-  .venv                 : 전용 Python 환경
-  auto-download.log     : 자동 다운로드 로그
-
-Codex MCP
-  ytdownpc_mcp.py      : 로컬 stdio MCP 서버 (Codex CLI에 ytdownpc 이름으로 등록)
-  video_info(url)      : 다운로드 없이 공개 영상 정보 조회
-  start_download(url, quality="best") : Windows 다운로드 폴더로 비동기 저장
-  download_status(job_id) : 진행 상태 및 저장 파일 확인
-  MCP를 켜는 것만으로 다운로드는 시작되지 않습니다.
-  다운로드 작업 상태는 MCP 서버 메모리에 보관되므로 서버 재시작 시 사라집니다.
-  테스트: .venv\Scripts\python.exe -m unittest -q test_ytdownpc_mcp
+MCP: video_info / start_download(url, quality="best", audio_only=false) / download_status / cancel_download
+MCP 서버에는 브라우저 UI가 없으므로 공개 자료 기준입니다. GUI/MCP 대기열은 프로세스별이지만 같은 출력 폴더 쓰기/삭제는 잠금으로 보호합니다.
+기능 비교와 소스 실행·빌드·의존성 안내는 README.md와 docs/user-guide.html을 참고하세요.
+외부 구성요소 고지는 THIRD_PARTY_NOTICES.md 및 docs/third-party에 있습니다.

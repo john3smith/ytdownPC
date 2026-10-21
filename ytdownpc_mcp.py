@@ -1,80 +1,38 @@
-"""Local stdio MCP bridge for YTDownPC. No download starts on server launch."""
-
-from __future__ import annotations
-
+"""Local stdio interface. Server startup never starts a download."""
 import threading
-import uuid
-from pathlib import Path
-from typing import Any
-
 from mcp.server import MCPServer
-
-from ytdownpc import DEFAULT_OUTPUT, FORMAT_SELECTORS, download_video, probe_video, validate_media_url
-
-
-server = MCPServer("ytdownpc")
-_lock = threading.Lock()
-_jobs: dict[str, dict[str, Any]] = {}
-
-
+from ytdownpc import FORMAT_SELECTORS,probe_video,validate_media_url
+from pc_queue import DownloadQueue
+from pc_storage import settings
+server=MCPServer('ytdownpc');_manager=None;_lock=threading.Lock()
+def manager():
+    global _manager
+    with _lock:
+        if _manager is None:_manager=DownloadQueue()
+        return _manager
 @server.tool()
-def video_info(url: str) -> dict[str, Any]:
-    """Read public video metadata without downloading it."""
+def video_info(url:str)->dict:
+    """Read public media metadata without downloading."""
     return probe_video(validate_media_url(url))
-
-
 @server.tool()
-def start_download(url: str, quality: str = "best") -> dict[str, str]:
-    """Download one public video to the Windows Downloads folder. Returns a job ID."""
-    url = validate_media_url(url)
-    if quality not in FORMAT_SELECTORS:
-        raise ValueError(f"quality must be one of: {', '.join(FORMAT_SELECTORS)}")
-
-    job_id = uuid.uuid4().hex
-    with _lock:
-        if any(job["status"] in {"queued", "running"} for job in _jobs.values()):
-            raise RuntimeError("A YTDownPC MCP download is already running")
-        _jobs[job_id] = {
-            "status": "queued",
-            "url": url,
-            "quality": quality,
-            "output_dir": str(DEFAULT_OUTPUT),
-            "progress": None,
-            "result": None,
-            "error": None,
-        }
-
-    def on_progress(event: dict[str, Any]) -> None:
-        with _lock:
-            if event.get("stage") == "downloading":
-                _jobs[job_id]["progress"] = round(float(event.get("percent") or 0), 1)
-
-    def worker() -> None:
-        with _lock:
-            _jobs[job_id]["status"] = "running"
-        try:
-            result = download_video(url, DEFAULT_OUTPUT, quality, on_progress)
-            path = Path(result.get("file") or "")
-            if not path.is_file() or path.stat().st_size == 0:
-                raise RuntimeError("Download returned no non-empty output file")
-            with _lock:
-                _jobs[job_id].update(status="completed", progress=100, result=result)
-        except Exception as exc:
-            with _lock:
-                _jobs[job_id].update(status="failed", error=str(exc))
-
-    threading.Thread(target=worker, name=f"ytdownpc-{job_id[:8]}", daemon=True).start()
-    return {"job_id": job_id, "status": "queued", "output_dir": str(DEFAULT_OUTPUT)}
-
-
+def start_download(url:str,quality:str='best',audio_only:bool=False)->dict:
+    """Enqueue public media or M4A extraction using the desktop output/Wi-Fi settings."""
+    url=validate_media_url(url)
+    if quality not in FORMAT_SELECTORS:raise ValueError('Unknown quality')
+    opts=settings();opts.update(quality=quality,audio_only=audio_only,cookies=[])
+    id=manager().enqueue(url,opts)
+    return dict(job_id=id,status='queued',output_dir=opts['output'])
 @server.tool()
-def download_status(job_id: str) -> dict[str, Any]:
-    """Read the progress and result of a download started by this MCP server."""
-    with _lock:
-        if job_id not in _jobs:
-            raise ValueError("Unknown job ID (jobs are lost when the MCP server restarts)")
-        return {"job_id": job_id, **_jobs[job_id].copy()}
-
-
-if __name__ == "__main__":
-    server.run(transport="stdio")
+def download_status(job_id:str)->dict:
+    """Read completion, progress and actual final files (not only task startup)."""
+    job=next((j for j in manager().snapshot() if j['id']==job_id),None)
+    if job is None:raise ValueError('Unknown job ID; jobs do not survive a server restart')
+    return dict(job_id=job_id,**job)
+@server.tool()
+def cancel_download(job_id:str)->dict:
+    """Cancel one queued/active job and its child processes."""
+    download_status(job_id);manager().cancel(job_id);return download_status(job_id)
+if __name__=='__main__':
+    try:server.run(transport='stdio')
+    finally:
+        if _manager:_manager.close()

@@ -9,5 +9,5 @@ for /f "tokens=2 delims==" %%V in ('findstr /b "APP_VERSION" version_info.py') d
 set "APP_VERSION=%APP_VERSION: =%"
 set "APP_VERSION=%APP_VERSION:"=%"
 echo.
-echo EXE: %~dp0dist\YTDownPC-v%APP_VERSION%.exe
+echo EXE: %~dp0dist\YTDownPC-v%APP_VERSION%\YTDownPC-v%APP_VERSION%.exe
 endlocal

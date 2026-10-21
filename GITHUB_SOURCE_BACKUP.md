@@ -1,5 +1,9 @@
 # ytdownPC source snapshot
 
+2026-10-21: v1.1.0 desktop parity changes are maintained directly in this repository.
+The original C:/ytdownpc v1.0.0 installation was read-only during this change and
+was not silently replaced. Install the new portable Release as described in README.
+
 Prepared from the current local project on 2026-10-05.
 
 This repository is a source backup, not a release artifact or a running service.
