@@ -10,4 +10,6 @@ set "APP_VERSION=%APP_VERSION: =%"
 set "APP_VERSION=%APP_VERSION:"=%"
 echo.
 echo EXE: %~dp0dist\YTDownPC-v%APP_VERSION%\YTDownPC-v%APP_VERSION%.exe
+echo UNSIGNED local build candidate. Not approved for production release.
+echo Follow docs\WINDOWS_SIGNING.md and verify the final signed EXE before packaging.
 endlocal

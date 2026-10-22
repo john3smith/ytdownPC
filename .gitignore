@@ -35,3 +35,8 @@ english-vocabulary-record.json
 telegram-outbox/
 codex-progress-logs/
 .tools/
+
+# Private Windows signing material
+*.pfx
+*.p12
+*.pvk
