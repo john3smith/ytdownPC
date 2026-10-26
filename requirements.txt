@@ -16,29 +16,25 @@ idna==3.20
 imageio-ffmpeg==0.6.0
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
-mcp==2.2.0
-mcp-types==2.2.0
+mcp==2.3.0
+mcp-types==2.3.0
 opentelemetry-api==1.45.1
 packaging==26.3
-pefile==2024.8.26; sys_platform == "win32"
 pillow==13.0.0
 pycparser==3.12
 pydantic==2.14.1
 pydantic-core==2.50.1
-pyinstaller==6.22.2
+pyinstaller==6.22.3
 pyinstaller-hooks-contrib==2026.9
-pyjwt==2.15.1
+pyjwt[crypto]==2.15.1
 pyside6==6.12.0
 pyside6-addons==6.12.0
 pyside6-essentials==6.12.0
 pyside6-pdf==6.12.0.140
 pyside6-webengine==6.12.0.140
 python-multipart==0.0.32
-pywin32==312; sys_platform == "win32"
-pywin32-ctypes==0.2.3; sys_platform == "win32"
 referencing==0.37.0
 rpds-py==2026.9.1
-setuptools==84.2.1
 shiboken6==6.12.0
 sse-starlette==3.6.0
 starlette==1.10.0
@@ -46,5 +42,5 @@ truststore==0.10.5
 typing-extensions==4.16.0
 typing-inspection==0.4.4
 uvicorn==0.54.0
-yt-dlp==2026.8.19
+yt-dlp==2026.10.21
 yt-dlp-ejs==0.8.0
