@@ -29,6 +29,54 @@ class PolicyTests(unittest.TestCase):
         for u in ['https://youtube.com/a','https://www.instagram.com/p/abc/','https://x.com/home']:
             with self.assertRaises(ValueError):account_url(u)
 class StorageTests(unittest.TestCase):
+    def test_settings_recover_from_non_object_json(self):
+        with tempfile.TemporaryDirectory() as td,patch.object(store,'DATA_DIR',Path(td)):
+            path=Path(td)/'settings.json'
+            for value in [None,[],42,'text',True]:
+                path.write_text(json.dumps(value),encoding='utf-8')
+                self.assertEqual(store.settings(),store.DEFAULTS)
+                self.assertEqual(json.loads(path.read_text('utf-8')),value)
+    def test_settings_keep_only_valid_known_values(self):
+        with tempfile.TemporaryDirectory() as td,patch.object(store,'DATA_DIR',Path(td)):
+            path=Path(td)/'settings.json'
+            path.write_text(json.dumps(dict(output=None,quality=[],audio_only='false',immediate=0,wifi_only=True,unknown='ignored')),encoding='utf-8')
+            actual=store.settings()
+            self.assertEqual(actual,{**store.DEFAULTS,'wifi_only':True})
+            valid={**store.DEFAULTS,'output':str(Path(td)/'한글'),'quality':'720','audio_only':True,'immediate':False}
+            path.write_text(json.dumps(valid),encoding='utf-8')
+            self.assertEqual(store.settings(),valid)
+    def test_settings_reject_oversized_file(self):
+        with tempfile.TemporaryDirectory() as td,patch.object(store,'DATA_DIR',Path(td)):
+            (Path(td)/'settings.json').write_text(json.dumps({'output':'a'*65536}),encoding='utf-8')
+            self.assertEqual(store.settings(),store.DEFAULTS)
+    def test_settings_deep_json_does_not_crash_or_replace_source(self):
+        with tempfile.TemporaryDirectory() as td,patch.object(store,'DATA_DIR',Path(td)):
+            path=Path(td)/'settings.json';raw='['*2000+'0'+']'*2000
+            path.write_text(raw,encoding='utf-8')
+            self.assertEqual(store.settings(),store.DEFAULTS)
+            self.assertEqual(path.read_text('utf-8'),raw)
+    def test_runtime_activation_ignores_invalid_metadata(self):
+        import sys
+        with tempfile.TemporaryDirectory() as td,patch.object(store,'DATA_DIR',Path(td)):
+            (Path(td)/'runtime').mkdir();(Path(td)/'runtime/yt-dlp.zip').write_bytes(b'bad')
+            before=list(sys.path)
+            for record in [None,[],42,{'sha256':[]},{'sha256':None}]:
+                store.atomic_json(Path(td)/'library.json',record)
+                store.activate_library()
+                self.assertEqual(sys.path,before)
+    def test_runtime_update_recovers_invalid_metadata_without_network(self):
+        import hashlib,zipfile
+        payload=io.BytesIO()
+        with zipfile.ZipFile(payload,'w') as archive:archive.writestr('yt_dlp/__init__.py','# synthetic test runtime')
+        raw=payload.getvalue();checksum=hashlib.sha256(raw).hexdigest()
+        prefix='https://github.com/yt-dlp/yt-dlp/releases/download/test/'
+        release=json.dumps(dict(tag_name='test',assets=[dict(name=n,browser_download_url=prefix+n) for n in ['yt-dlp','SHA2-256SUMS']])).encode()
+        def fetch(url):return release if url.endswith('/latest') else (checksum+'  yt-dlp\n').encode() if url.endswith('SHA2-256SUMS') else raw
+        with tempfile.TemporaryDirectory() as td,patch.object(store,'DATA_DIR',Path(td)),patch.object(store,'_get',side_effect=fetch):
+            for record in [None,[],42,{'checked':'yesterday'},{'checked':float('inf')},{'checked':10**1000},{'checked':time.time()+100000}]:
+                store.atomic_json(Path(td)/'library.json',record)
+                self.assertEqual(store._update_library()['sha256'],checksum)
+                self.assertEqual((Path(td)/'runtime/yt-dlp.zip').read_bytes(),raw)
     def test_private_roundtrip(self):
         with tempfile.TemporaryDirectory() as td:
             p=Path(td)/'private.bin';data={'value':'test-only-placeholder'};store.write_private(p,data)
