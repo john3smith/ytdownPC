@@ -103,7 +103,7 @@ def inventory(root, destination):
 def osv_scan(exe, root, folder, label):
     custom = folder / (label+'-inventory.json'); count = inventory(root,custom)
     report = folder / (label+'-results.json')
-    args=[str(exe),'scan','source','--recursive','--no-call-analysis=all','--format=json','--output-file',str(report)]
+    args=[str(exe),'scan','source','--recursive','--no-call-analysis=all','--all-packages','--format=json','--output-file',str(report)]
     if count: args+=['--lockfile','osv-scanner:'+str(custom)]
     for name in tracked(root):
         p=Path(name)
@@ -122,6 +122,7 @@ def osv_scan(exe, root, folder, label):
             total+=1; package=entry.get('package',{})
             for advisory in entry.get('vulnerabilities',[]):
                 findings.add((package.get('ecosystem',''),package.get('name',''),package.get('version',''),advisory['id']))
+                summary('Dependency finding: ' + json.dumps({'ecosystem': package.get('ecosystem',''), 'name': package.get('name',''), 'version': package.get('version',''), 'advisory': advisory['id']}, ensure_ascii=True))
     summary(f'Dependency scan ({label}): {total} package entries, {len(findings)} affected package/version/advisory combinations.')
     return findings
 
