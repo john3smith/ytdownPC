@@ -9,9 +9,23 @@ DEFAULTS=dict(output=str(DEFAULT_OUTPUT),quality='best',audio_only=False,immedia
 def atomic_json(path,data):
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
     tmp=path.with_name(path.name+'.tmp');tmp.write_text(json.dumps(data,ensure_ascii=False,indent=2),'utf-8');os.replace(tmp,path)
+def _json_object(path,limit=65536):
+    try:
+        with path.open(encoding='utf-8') as stream:raw=stream.read(limit+1)
+        if len(raw)>limit:return {}
+        value=json.loads(raw)
+        return value if isinstance(value,dict) else {}
+    except (OSError,ValueError,RecursionError):return {}
+
 def settings():
-    try:return {**DEFAULTS,**json.loads((DATA_DIR/'settings.json').read_text('utf-8'))}
-    except (OSError,ValueError):return dict(DEFAULTS)
+    result=dict(DEFAULTS);saved=_json_object(DATA_DIR/'settings.json')
+    output=saved.get('output')
+    if isinstance(output,str) and output.strip() and '\0' not in output and len(output)<=32767:result['output']=output
+    quality=saved.get('quality')
+    if isinstance(quality,str) and quality in {'best','1080','720'}:result['quality']=quality
+    for key,default in DEFAULTS.items():
+        if isinstance(default,bool) and type(saved.get(key)) is bool:result[key]=saved[key]
+    return result
 def save_settings(data):atomic_json(DATA_DIR/'settings.json',{k:data[k] for k in DEFAULTS if k in data})
 def _dpapi(data,decrypt=False):
     class Blob(ctypes.Structure):_fields_=[('size',wintypes.DWORD),('data',ctypes.POINTER(ctypes.c_ubyte))]
@@ -35,9 +49,9 @@ def update_library(force=False):
     with OutputLock(DATA_DIR/'runtime'):return _update_library(force)
 def _update_library(force=False):
     marker=DATA_DIR/'library.json';dest=DATA_DIR/'runtime/yt-dlp.zip'
-    try:old=json.loads(marker.read_text('utf-8'))
-    except (OSError,ValueError):old={}
-    if not force and time.time()-old.get('checked',0)<86400:return old
+    old=_json_object(marker,8192);checked=old.get('checked',0);now=time.time()
+    if (not force and type(checked) in (int,float)
+            and 0<=checked<=now and now-checked<86400):return old
     release=json.loads(_get('https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest'))
     tag=release['tag_name'];assets={a['name']:a['browser_download_url'] for a in release['assets']}
     def asset(name):
@@ -55,8 +69,9 @@ def _update_library(force=False):
     os.replace(tmp,dest);record=dict(version=tag,sha256=expected,checked=time.time());atomic_json(marker,record);return record
 def activate_library():
     try:
-        record=json.loads((DATA_DIR/'library.json').read_text('utf-8'));p=DATA_DIR/'runtime/yt-dlp.zip'
-        if hashlib.sha256(p.read_bytes()).hexdigest()==record['sha256']:sys.path.insert(0,str(p))
+        record=_json_object(DATA_DIR/'library.json',8192);p=DATA_DIR/'runtime/yt-dlp.zip';expected=record.get('sha256')
+        if not isinstance(expected,str) or not re.fullmatch('[0-9a-f]{64}',expected):return
+        if hashlib.sha256(p.read_bytes()).hexdigest()==expected:sys.path.insert(0,str(p))
     except (OSError,ValueError,KeyError):pass
 def ffmpeg_path():
     """Obtain the original upstream binary locally rather than repackaging it."""
