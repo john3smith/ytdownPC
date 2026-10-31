@@ -165,8 +165,8 @@ class QueueTests(unittest.TestCase):
             pidfile=Path(td)/'pid.txt'
             code='import subprocess,sys,time;from pathlib import Path;p=subprocess.Popen([sys.executable,"-c","import time;time.sleep(60)"]);Path(sys.argv[1]).write_text(str(p.pid));time.sleep(60)'
             tree=ProcessTree([sys.executable,'-c',code,str(pidfile)])
-            try:self.wait(pidfile.exists);pid=int(pidfile.read_text());tree.close();tree.wait()
-            finally:tree.close()
+            try:self.wait(lambda:pidfile.exists() and pidfile.stat().st_size>0);pid=int(pidfile.read_text());tree.close();tree.wait()
+            finally:tree.close();tree.wait()
             import win32api,win32con,win32event
             try:
                 h=win32api.OpenProcess(win32con.SYNCHRONIZE,False,pid)

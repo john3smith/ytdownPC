@@ -5,68 +5,101 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from PySide6.QtCore import Qt,QTimer,Signal,QObject,QUrl
 from PySide6.QtGui import QDesktopServices,QAction
-from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QVBoxLayout,QHBoxLayout,QLabel,QLineEdit,QPushButton,QComboBox,QCheckBox,QProgressBar,QTabWidget,QListWidget,QPlainTextEdit,QFileDialog,QMessageBox,QSystemTrayIcon,QMenu,QStyle)
+from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QVBoxLayout,QHBoxLayout,QLabel,QLineEdit,QPushButton,QComboBox,QCheckBox,QProgressBar,QTabWidget,QListWidget,QPlainTextEdit,QFileDialog,QMessageBox,QSystemTrayIcon,QMenu,QStyle,QScrollArea)
 from pc_storage import DATA_DIR,settings,save_settings,partial_files,update_library
 from pc_engine import QUALITY_LABELS,validate_media_url,validate_web_url,format_bytes,redact,probe_video
 from pc_queue import DownloadQueue
 from pc_browser import Sessions,BrowserWindow,SITES,account_url
 from version_info import APP_VERSION
+from pc_parity import extract_media_url,failure_advice
 class Signals(QObject):event=Signal(dict)
 class DownloaderApp(QMainWindow):
     def __init__(self):
-        super().__init__();self.setWindowTitle('YTDownPC v'+APP_VERSION);self.resize(940,800);self.setMinimumSize(760,680)
+        super().__init__();self.setWindowTitle('YTDownPC v'+APP_VERSION);self.resize(940,800);self.setMinimumSize(640,480)
         self.signals=Signals();self.signals.event.connect(self.apply_event);self.manager=DownloadQueue(self.signals.event.emit);self.sessions=Sessions(self);self.windows=[];self.logs=[];self.last_cancel=0;self.configuration=settings();self.seen_completed=set();self.setAcceptDrops(True)
         self.setStyleSheet('QMainWindow,QWidget{background:#f4f7fa;color:#182e3c;font:10pt "Malgun Gothic"} QPushButton{background:#e3ebf2;border:0;border-radius:7px;padding:9px 14px} QPushButton:hover{background:#d0e1ef} QLineEdit,QComboBox,QListWidget,QPlainTextEdit{background:white;border:1px solid #cfdae2;border-radius:5px;padding:6px} QProgressBar{border:0;background:#dae5ee;border-radius:5px;text-align:center} QProgressBar::chunk{background:#087f8c;border-radius:5px} QTabBar::tab{padding:10px 22px} QLabel#heading{font-size:25px;font-weight:bold;color:#007b85}')
         host=QWidget();self.setCentralWidget(host);layout=QVBoxLayout(host);layout.setContentsMargins(24,18,24,18);layout.setSpacing(12)
         heading=QLabel('YTDownPC  '+APP_VERSION);heading.setObjectName('heading');layout.addWidget(heading)
         layout.addWidget(QLabel('영상·사진·M4A 음원  |  작업별 설정 유지  |  최대 10개 대기'))
-        login=QHBoxLayout();self.site=QComboBox();self.site.addItems(SITES);login.addWidget(self.site)
-        self.button(login,'로그인 / 웹페이지',self.login);self.button(login,'선택 사이트 세션 쿠키 지우기',self.clear_login);self.login_status=QLabel('앱 전용 세션');login.addWidget(self.login_status);login.addStretch();layout.addLayout(login)
         self.tabs=QTabWidget();layout.addWidget(self.tabs,1)
-        main=QWidget();body=QVBoxLayout(main);body.setSpacing(14);self.tabs.addTab(main,'다운로드')
-        body.addWidget(QLabel('YouTube · X · Instagram 주소'))
-        row=QHBoxLayout();self.url=QLineEdit();self.url.setPlaceholderText('링크를 붙여넣거나 끌어 놓으세요.');self.url.returnPressed.connect(self.enqueue);row.addWidget(self.url,1);self.button(row,'붙여넣기',self.paste);self.button(row,'현재 웹페이지 보기',self.webpage);body.addLayout(row)
-        row=QHBoxLayout();self.immediate=QCheckBox('붙여넣기·드롭 후 바로 다운로드');self.wifi=QCheckBox('Wi-Fi에서만 시작');row.addWidget(self.immediate);row.addWidget(self.wifi);row.addStretch();body.addLayout(row)
-        row=QHBoxLayout();self.audio=QCheckBox('음원만 추출 (M4A)');row.addWidget(self.audio);self.quality=QComboBox();self.quality.addItems(QUALITY_LABELS);row.addWidget(self.quality);self.assist=QCheckBox('HTTPS 연결 보조');row.addWidget(self.assist);row.addStretch();body.addLayout(row)
+        main=QWidget();body=QVBoxLayout(main);body.setSpacing(14);self.download_scroll=QScrollArea();self.download_scroll.setWidgetResizable(True);self.download_scroll.setWidget(main);self.tabs.addTab(self.download_scroll,'다운로드')
+        body.addWidget(QLabel('YouTube · X · Instagram · 추가 사이트 주소'))
+        self.url=QLineEdit();self.url.setPlaceholderText('링크를 붙여넣거나 끌어 놓으세요.');self.url.returnPressed.connect(self.enqueue);body.addWidget(self.url)
+        row=QHBoxLayout();self.button(row,'붙여넣기',self.paste);self.button(row,'현재 웹페이지 보기',self.webpage);body.addLayout(row)
+        self.download_button=self.button(body,'다운로드 / 대기열 추가',self.enqueue);self.download_button.setStyleSheet('background:#087f8c;color:white;font-weight:bold;padding:12px')
+        self.options_button=self.button(body,'저장 옵션',self.toggle_options)
+        self.options_panel=QWidget();option_body=QVBoxLayout(self.options_panel);body.addWidget(self.options_panel);self.options_panel.hide()
+        self.immediate=QCheckBox('클립보드·붙여넣기·드롭 후 바로 다운로드');self.wifi=QCheckBox('Wi-Fi에서만 시작');option_body.addWidget(self.immediate);option_body.addWidget(self.wifi)
+        row=QHBoxLayout();self.audio=QCheckBox('음원만 추출 (M4A)');row.addWidget(self.audio);self.quality=QComboBox();self.quality.addItems(QUALITY_LABELS);row.addWidget(self.quality);option_body.addLayout(row)
+        self.assist=QCheckBox('HTTPS 연결 보조');option_body.addWidget(self.assist)
         self.assist.setToolTip('Windows의 curl 기반 브라우저 통신을 사용합니다. 인증서 검증은 유지합니다. Android 로컬 TLS 릴레이와 구현이 다릅니다.')
-        row=QHBoxLayout();self.output=QLineEdit(self.configuration['output']);row.addWidget(self.output,1);self.button(row,'저장 폴더 선택',self.folder);self.button(row,'폴더 열기',self.open_folder);body.addLayout(row)
+        self.output=QLineEdit(self.configuration['output']);option_body.addWidget(self.output)
+        row=QHBoxLayout();self.button(row,'저장 폴더 선택',self.folder);self.button(row,'폴더 열기',self.open_folder);option_body.addLayout(row)
         self.title=QLabel('미디어 대기 중');self.title.setWordWrap(True);body.addWidget(self.title)
         self.progress=QProgressBar();self.progress.setRange(0,100);body.addWidget(self.progress);self.status=QLabel('대기 중');self.status.setWordWrap(True);body.addWidget(self.status)
-        row=QHBoxLayout();self.download_button=self.button(row,'다운로드 / 대기열 추가',self.enqueue);self.download_button.setStyleSheet('background:#087f8c;color:white;font-weight:bold;padding:12px')
-        self.button(row,'X·Instagram 계정 전체 미디어',self.account);self.button(row,'전체 취소 (빠르게 두 번)',self.cancel_all);body.addLayout(row)
+        self.button(body,'전체 취소 (빠르게 두 번)',self.cancel_all)
         row=QHBoxLayout();self.button(row,'미완료 파일 조회 / 삭제',self.incomplete);self.button(row,'사용 방법',self.help);row.addStretch();body.addLayout(row)
-        self.auto_update=QCheckBox('첫 작업 전 최신 stable 다운로드 라이브러리 확인 (하루 1회)');body.addWidget(self.auto_update)
-        self.button(body,'다운로드 라이브러리 지금 업데이트',self.update);body.addStretch()
+        self.auto_update=QCheckBox('다운로드 라이브러리 하루 1회 확인');option_body.addWidget(self.auto_update)
+        self.button(option_body,'다운로드 라이브러리 지금 업데이트',self.update);body.addStretch()
         queue_page=QWidget();ql=QVBoxLayout(queue_page);self.queue_list=QListWidget();ql.addWidget(self.queue_list);self.button(ql,'선택 항목 취소',self.cancel_selected);ql.addWidget(QLabel('계정 검색도 한 작업으로 예약됩니다. 검색 종료 후 뒤 작업을 이어갑니다.'));self.tabs.addTab(queue_page,'대기열 / 내역')
+        account_page=QWidget();al=QVBoxLayout(account_page);self.site=QComboBox();self.site.addItems(SITES);al.addWidget(self.site)
+        self.button(al,'로그인 / 웹페이지',self.login);self.button(al,'선택 사이트 세션 쿠키 지우기',self.clear_login)
+        self.login_status=QLabel('앱 전용 세션');self.login_status.setWordWrap(True);al.addWidget(self.login_status)
+        self.button(al,'X·Instagram 계정 전체 미디어',self.account)
+        note=QLabel('다운로드 탭에 입력한 프로필·게시물의 계정을 검색합니다.\n추가 사이트는 페이지 로딩 후 직접 접근 확인을 완료하고 세션 사용을 눌러 주세요.');note.setWordWrap(True);al.addWidget(note);al.addStretch();self.tabs.addTab(account_page,'로그인 / 계정')
         log_page=QWidget();ll=QVBoxLayout(log_page);self.log=QPlainTextEdit();self.log.setReadOnly(True);ll.addWidget(self.log);self.button(ll,'로그 복사',lambda:QApplication.clipboard().setText(self.log.toPlainText()));self.tabs.addTab(log_page,'진단 로그')
         self.immediate.setChecked(self.configuration['immediate']);self.wifi.setChecked(self.configuration['wifi_only']);self.audio.setChecked(self.configuration['audio_only']);self.assist.setChecked(self.configuration['https_assist']);self.auto_update.setChecked(self.configuration['auto_update'])
         self.quality.setCurrentText(next((k for k,v in QUALITY_LABELS.items() if v==self.configuration['quality']),'최고 화질'));self.quality.setEnabled(not self.audio.isChecked())
         self.audio.toggled.connect(lambda on:self.quality.setEnabled(not on))
         for c in [self.immediate,self.wifi,self.audio,self.assist,self.auto_update]:c.toggled.connect(self.persist)
         self.quality.currentTextChanged.connect(self.persist);self.output.editingFinished.connect(self.persist)
+        self.audio.toggled.connect(self.update_options_label);self.quality.currentTextChanged.connect(self.update_options_label);self.update_options_label()
+        self.clipboard_seen=None;self.clipboard_started=None
+        QApplication.instance().applicationStateChanged.connect(self.clipboard_activation)
+        QApplication.clipboard().dataChanged.connect(self.clipboard_changed)
+        QTimer.singleShot(0,self.clipboard_changed)
         self.timer=QTimer(self);self.timer.setInterval(500);self.timer.timeout.connect(self.refresh);self.timer.start()
         self.tray=QSystemTrayIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowDown),self);menu=QMenu();show=menu.addAction('YTDownPC 열기');show.triggered.connect(self.reveal);exit=menu.addAction('종료');exit.triggered.connect(self.exit_app);self.tray.setContextMenu(menu);self.tray.activated.connect(lambda reason:self.reveal());self.tray.show()
         for site in SITES:self.sessions.profile(site)
     @staticmethod
     def button(layout,text,call):
         b=QPushButton(text);b.clicked.connect(call);layout.addWidget(b);return b
-    def options(self):return dict(output=str(Path(self.output.text()).expanduser().resolve()),quality=QUALITY_LABELS[self.quality.currentText()],audio_only=self.audio.isChecked(),immediate=self.immediate.isChecked(),wifi_only=self.wifi.isChecked(),https_assist=self.assist.isChecked(),auto_update=self.auto_update.isChecked(),cookies=self.sessions.snapshot())
+    def options(self):return dict(output=str(Path(self.output.text()).expanduser().resolve()),quality=QUALITY_LABELS[self.quality.currentText()],audio_only=self.audio.isChecked(),immediate=self.immediate.isChecked(),wifi_only=self.wifi.isChecked(),https_assist=self.assist.isChecked(),auto_update=self.auto_update.isChecked(),cookies=self.sessions.snapshot(),user_agent=self.sessions.user_agent(self.url.text()))
     def persist(self,*args):save_settings(self.options())
     def error(self,e):QMessageBox.warning(self,'YTDownPC',redact(str(e)))
     def add_log(self,text):
         self.logs.append(time.strftime('%H:%M:%S')+' '+redact(text));self.logs=self.logs[-200:];self.log.setPlainText('\n'.join(self.logs))
     def enqueue(self):
         try:
-            self.manager.enqueue(self.url.text(),self.options());self.persist();self.status.setText('대기열에 등록했습니다.');self.refresh()
+            self.manager.enqueue(self.url.text(),self.options());self.persist();self.status.setText('대기열에 등록했습니다.');self.refresh();return True
         except Exception as e:self.error(e)
+        return False
+    def toggle_options(self):
+        self.options_panel.setVisible(not self.options_panel.isVisible());self.update_options_label()
+    def update_options_label(self,*args):
+        mode='M4A 음원' if self.audio.isChecked() else self.quality.currentText()
+        self.options_button.setText('저장 옵션 닫기 ∧' if self.options_panel.isVisible() else mode+' · 저장 옵션 ∨')
+    def clipboard_activation(self,state):
+        if state==Qt.ApplicationState.ApplicationActive:QTimer.singleShot(0,self.clipboard_changed)
+    def clipboard_changed(self):
+        if QApplication.activeWindow() is not self or not self.isVisible() or QApplication.activeModalWidget():return
+        url=extract_media_url(QApplication.clipboard().text())
+        if not url:return
+        if url!=self.clipboard_seen:self.clipboard_seen=url;self.url.setText(url)
+        if self.immediate.isChecked() and url!=self.clipboard_started:
+            try:
+                self.manager.enqueue(url,self.options());self.clipboard_started=url;self.persist();self.status.setText('클립보드 링크를 대기열에 등록했습니다.');self.refresh()
+            except Exception as error:self.status.setText(redact(str(error)))
+    def receive_link(self,text):
+        url=extract_media_url(text)
+        self.url.setText(url or text.strip())
+        if self.immediate.isChecked() and self.enqueue():self.clipboard_started=url
     def paste(self):
-        self.url.setText(QApplication.clipboard().text().strip())
-        if self.immediate.isChecked():self.enqueue()
+        self.receive_link(QApplication.clipboard().text())
     def dragEnterEvent(self,e):
         if e.mimeData().hasText():e.acceptProposedAction()
     def dropEvent(self,e):
-        self.url.setText(e.mimeData().text().strip());e.acceptProposedAction()
-        if self.immediate.isChecked():self.enqueue()
+        self.receive_link(e.mimeData().text());e.acceptProposedAction()
     def folder(self):
         if p:=QFileDialog.getExistingDirectory(self,'저장 폴더',self.output.text()):self.output.setText(p);self.persist()
     def open_folder(self):
@@ -76,7 +109,7 @@ class DownloaderApp(QMainWindow):
     def login(self):self.open_browser(self.site.currentText(),SITES[self.site.currentText()])
     def webpage(self):
         try:
-            url=validate_web_url(self.url.text());host=urlsplit(url).hostname;site=next((s for s,u in SITES.items() if host.endswith(urlsplit(u).hostname.removeprefix('www.'))),'Web');self.open_browser(site,url)
+            url=validate_web_url(self.url.text());host=urlsplit(url).hostname;site=next((s for s,u in SITES.items() if host==urlsplit(u).hostname.removeprefix('www.') or host.endswith('.'+urlsplit(u).hostname.removeprefix('www.'))),'Web');self.open_browser(site,url)
         except Exception as e:self.error(e)
     def clear_login(self):
         site=self.site.currentText()
@@ -91,7 +124,7 @@ class DownloaderApp(QMainWindow):
                 self.status.setText('Instagram 게시물 작성자를 확인하는 중')
                 def resolve():
                     try:
-                        info=probe_video(url,opts['cookies']);owner=info.get('channel') or info.get('uploader_id')
+                        info=probe_video(url,opts['cookies'],opts.get('user_agent'));owner=info.get('channel') or info.get('uploader_id')
                         if not owner:raise ValueError('게시물 작성자를 확인하지 못했습니다. 프로필 주소를 입력해 주세요.')
                         target='https://www.instagram.com/'+owner+'/';account_url(target);self.signals.event.emit(dict(stage='resolved-account',id=reservation,target=target))
                     except Exception as e:self.signals.event.emit(dict(stage='account-error',id=reservation,text=redact(str(e))))
@@ -144,6 +177,10 @@ class DownloaderApp(QMainWindow):
         elif stage=='downloading':self.progress.setValue(int(e.get('percent') or 0));self.status.setText(f"저장 중 {e.get('percent',0):.0f}% · {format_bytes(e.get('downloaded'))} · {format_bytes(e.get('speed'))}/s")
         elif stage=='processing':self.progress.setValue(99);self.status.setText('병합·음원 추출·최종 파일 확인 중')
         elif stage=='preparing':self.progress.setValue(0);self.status.setText('미디어 정보 확인 중')
+        elif stage=='streaming':
+            self.progress.setValue(int(e.get('percent') or 0));percent='길이 미상' if e.get('percent') is None else str(int(e['percent']))+'%'
+            self.status.setText(f"스트리밍 저장 {percent} · {int(e.get('elapsed',0))}초 · {format_bytes(e.get('downloaded'))}")
+        elif stage=='verifying':self.progress.setValue(99);self.status.setText('완료 파일 형식·재생 가능 여부·SHA-256 확인 중')
         self.refresh()
     def refresh(self):
         selected=self.queue_list.currentItem().data(Qt.ItemDataRole.UserRole) if self.queue_list.currentItem() else None
@@ -160,9 +197,10 @@ class DownloaderApp(QMainWindow):
             if j['id']==selected:self.queue_list.setCurrentItem(item)
             if j['status'] in {'completed','failed','cancelled'} and j['id'] not in self.seen_completed:
                 self.seen_completed.add(j['id']);self.add_log(item.text()+((' · '+j['error']) if j['error'] else ''));self.status.setText(item.text())
+                if j['error'] and (advice:=failure_advice(j['error'])):self.add_log(advice);self.status.setText(advice)
                 if j['status']=='completed':self.progress.setValue(100);self.title.setText((j['result'] or {}).get('title','미디어'))
         self.login_status.setText(' · '.join(s+(': 세션 있음' if self.sessions.ready(s) else ': 미저장') for s in SITES))
-    def help(self):QMessageBox.information(self,'사용 방법','링크 입력 → 영상 화질 또는 M4A 선택 → 저장 폴더 → 다운로드.\n붙여넣기/드롭은 바로 다운로드 설정을 따릅니다.\n대기열에서 개별 취소, 전체 취소는 1초 안에 두 번 누릅니다.\n계정 전체는 프로필/게시물 작성자를 확인하고 검색 창에서 직접 로그인한 후 검색 시작을 누르세요. 끝 페이지 확인 실패 시 부분 목록을 전체로 처리하지 않습니다.\nWi-Fi 설정은 시작 시에만 적용됩니다. 진행 중 연결이 바뀌어도 중단하지 않습니다.\n로그인/보안 확인·CAPTCHA는 직접 처리해야 합니다. 인증서 오류를 무시하지 않습니다.\n창을 최소화해도 다운로드는 계속됩니다. 강제 종료 후 대기열 복원은 지원하지 않습니다.')
+    def help(self):QMessageBox.information(self,'사용 방법','링크 입력 → 저장 옵션에서 화질 또는 M4A 선택 → 다운로드.\n앱 활성화 시 클립보드 링크를 가져옵니다. 바로 다운로드를 끄면 입력만 합니다. 같은 링크의 자동 시작은 실행 세션 중 한 번이며 수동 다운로드는 다시 가능합니다.\n대기열에서 개별 취소, 전체 취소는 1초 안에 두 번 누릅니다.\n로그인 / 계정 탭에서 로그인·계정 전체 미디어를 이용하세요. 끝 페이지 확인 실패 시 부분 목록을 전체로 처리하지 않습니다.\n추가 사이트는 페이지 로딩 후 3초를 기다리고, 로그인·접근 확인을 직접 완료한 뒤 세션 사용을 누르세요.\nWi-Fi 설정은 시작 시에만 적용됩니다. 진행 중 연결이 바뀌어도 중단하지 않습니다.\n완료 파일은 형식·첫 1초 재생·SHA-256을 확인합니다. 영상 전체의 무결성 보장은 아닙니다.\n최소화해도 작업은 계속됩니다. 강제 종료 후 대기열 복원은 지원하지 않습니다.')
     def reveal(self):self.showNormal();self.raise_();self.activateWindow()
     def exit_app(self):self.manager.close();self.tray.hide();QApplication.quit()
     def closeEvent(self,event):

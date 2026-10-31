@@ -1,4 +1,4 @@
 """Single source of truth for YTDownPC release versioning."""
 
 APP_NAME = "YTDownPC"
-APP_VERSION = "1.1.1"
+APP_VERSION = "1.2.0"

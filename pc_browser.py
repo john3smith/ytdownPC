@@ -10,7 +10,7 @@ from PySide6.QtWebEngineCore import QWebEnginePage,QWebEngineProfile,QWebEngineS
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from pc_engine import validate_web_url,validate_media_url
 from pc_storage import DATA_DIR
-SITES={'YouTube':'https://www.youtube.com/','X':'https://x.com/','Instagram':'https://www.instagram.com/'}
+SITES={'YouTube':'https://www.youtube.com/','X':'https://x.com/','Instagram':'https://www.instagram.com/','추가 사이트':'https://www.pornhub.com/'}
 class SecureRequests(QWebEngineUrlRequestInterceptor):
     def interceptRequest(self,request):
         if request.requestUrl().scheme() not in {'https','data','blob','about'}:request.block(True)
@@ -19,7 +19,7 @@ class SecurePage(QWebEnginePage):
         return url.scheme()=='https' or url.toString()=='about:blank'
     def createWindow(self,type):return self
 class Sessions:
-    def __init__(self,parent):self.parent=parent;self.profiles={};self.cookies={}
+    def __init__(self,parent):self.parent=parent;self.profiles={};self.cookies={};self.confirmed=set()
     def profile(self,site):
         if site not in self.profiles:
             path=DATA_DIR/'browser'/site;path.mkdir(parents=True,exist_ok=True)
@@ -34,9 +34,16 @@ class Sessions:
             def removed(c):self.cookies[site].pop((c.domain(),c.path(),bytes(c.name())),None)
             store.cookieAdded.connect(added);store.cookieRemoved.connect(removed);store.loadAllCookies();self.profiles[site]=profile
         return self.profiles[site]
-    def snapshot(self):return [dict(c) for jar in self.cookies.values() for c in jar.values()]
+    def snapshot(self):return [dict(c) for site,jar in self.cookies.items() if site!='추가 사이트' or site in self.confirmed for c in jar.values()]
+    def user_agent(self,url):
+        try:host=urlsplit(url).hostname or ''
+        except ValueError:return None
+        for site,target in SITES.items():
+            domain=urlsplit(target).hostname.removeprefix('www.')
+            if host==domain or host.endswith('.'+domain):return self.profile(site).httpUserAgent()
+        return None
     def clear(self,site):
-        self.profile(site).cookieStore().deleteAllCookies();self.cookies[site].clear()
+        self.confirmed.discard(site);self.profile(site).cookieStore().deleteAllCookies();self.cookies[site].clear()
     def ready(self,site):return bool(self.cookies.get(site))
 
 def account_url(url):
@@ -67,12 +74,37 @@ class BrowserWindow(QMainWindow):
         self.view.urlChanged.connect(lambda u:self.address.setText(u.toString()))
         self.state=QLabel('로그인·보안 확인은 직접 진행해 주세요.');self.statusBar().addWidget(self.state,1)
         self.timer=QTimer(self);self.timer.setInterval(1800);self.timer.timeout.connect(self.poll)
+        self.ready_at=float('inf');self.session_action=None
+        if site=='추가 사이트':
+            self.session_action=QAction('페이지 확인 완료 · 세션 사용',self);self.session_action.setEnabled(False)
+            self.session_action.triggered.connect(lambda:self.confirm_session(sessions));bar.addAction(self.session_action)
+            self.view.loadStarted.connect(self.invalidate_session)
+            self.view.urlChanged.connect(self.invalidate_session)
+            self.view.loadFinished.connect(self.loaded_session)
+            self.readiness_timer=QTimer(self);self.readiness_timer.setInterval(200);self.readiness_timer.timeout.connect(self.refresh_session);self.readiness_timer.start()
         if scan:
             self.site,self.username,self.target=account_url(url)
             script=QWebEngineScript();script.setName('YTDownPC account media observer');script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation);script.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld);script.setSourceCode(Path(__file__).with_name('account_capture.js').read_text('utf-8'));self.page.scripts().insert(script)
             self.scanAction=QAction('계정 검색 시작',self);self.scanAction.triggered.connect(self.start_scan);bar.addAction(self.scanAction)
             self.view.load(QUrl(self.target))
         else:self.view.load(QUrl(validate_web_url(url)))
+    def invalidate_session(self,*args):
+        self.ready_at=float('inf')
+        if self.session_action:self.session_action.setEnabled(False)
+        if hasattr(self,'readiness_timer'):self.readiness_timer.start()
+    def trusted_session_page(self):
+        p=urlsplit(self.view.url().toString());host=p.hostname or ''
+        return p.scheme=='https' and not p.username and not p.password and p.port in {None,443} and (host=='pornhub.com' or host.endswith('.pornhub.com'))
+    def loaded_session(self,ok):
+        if ok and self.trusted_session_page():self.ready_at=time.monotonic()+3
+        self.refresh_session()
+    def refresh_session(self):
+        ready=self.trusted_session_page() and time.monotonic()>=self.ready_at
+        self.session_action.setEnabled(ready)
+        self.state.setText('페이지의 로그인·접근 확인을 직접 완료한 뒤 세션 사용을 눌러 주세요.' if ready else '페이지 로딩 후 3초 대기 중 · 로그인·접근 확인은 직접 진행해 주세요.')
+    def confirm_session(self,sessions):
+        if not self.trusted_session_page() or time.monotonic()<self.ready_at:return
+        sessions.confirmed.add(self.site);self.readiness_timer.stop();self.state.setText('세션 사용을 선택했습니다. 접근 가능 여부는 다운로드 요청 시 확인됩니다.')
     def navigate(self):
         try:self.view.load(QUrl(validate_web_url(self.address.text())))
         except ValueError as e:QMessageBox.warning(self,'주소',str(e))
