@@ -1,6 +1,6 @@
 """Media engine shared by the desktop UI, CLI and MCP."""
 from __future__ import annotations
-import copy,http.cookiejar,json,os,re,urllib.parse
+import copy,hashlib,http.cookiejar,json,os,re,subprocess,threading,urllib.parse,uuid
 from pathlib import Path
 import yt_dlp
 from yt_dlp.extractor.twitter import TwitterIE
@@ -8,15 +8,16 @@ from yt_dlp.extractor.instagram import InstagramIE
 from yt_dlp.networking import Request
 from yt_dlp.utils import sanitize_filename
 from pc_storage import ffmpeg_path
+from pc_parity import stream_video_url,StreamProgress,failure_advice
 QUALITY_LABELS={'최고 화질':'best','1080p 이하':'1080','720p 이하':'720'}
 FORMAT_SELECTORS={
  'best':'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b',
  **{q:f'bv*[height<={q}][ext=mp4]+ba[ext=m4a]/b[height<={q}][ext=mp4]/bv*[height<={q}]+ba/b[height<={q}]' for q in ['1080','720']}}
-HOSTS={'youtube.com','youtu.be','instagram.com','x.com','twitter.com','t.co'}
+HOSTS={'youtube.com','youtu.be','youtube-nocookie.com','instagram.com','instagr.am','x.com','twitter.com','t.co','pornhub.com'}
 def validate_media_url(value):
     url=value.strip();p=urllib.parse.urlsplit(url);host=(p.hostname or '').lower()
-    if p.scheme not in {'https','http'} or p.username or p.password or p.port not in {None,80,443} or not any(host==h or host in {'www.'+h,'m.'+h,'mobile.'+h,'music.'+h} for h in HOSTS):raise ValueError('YouTube·Instagram·X의 미디어 주소를 입력해 주세요.')
-    return url
+    if p.scheme not in {'https','http'} or p.username or p.password or p.port not in {None,80,443} or not any(host==h or host.endswith('.'+h) for h in HOSTS):raise ValueError('지원하는 사이트의 미디어 주소를 입력해 주세요.')
+    return stream_video_url(url) or url
 def validate_web_url(value):
     p=urllib.parse.urlsplit(value.strip())
     if p.scheme!='https' or not p.hostname or p.username or p.password:raise ValueError('웹페이지는 HTTPS 주소만 열 수 있습니다.')
@@ -35,7 +36,9 @@ class QuietLogger:
     def __init__(self,emit):self.emit=emit
     def debug(self,m):pass
     def info(self,m):pass
-    def warning(self,m):self.emit({'stage':'message','text':redact(m)})
+    def warning(self,m):
+        self.emit({'stage':'message','text':redact(m)})
+        if advice:=failure_advice(m):self.emit({'stage':'message','text':advice})
     error=warning
 
 def photo_info(url,id,title):
@@ -80,8 +83,10 @@ def add_cookies(ydl,cookies):
 def create_ydl(options,cookies=None):
     ydl=yt_dlp.YoutubeDL(options);add_cookies(ydl,cookies)
     ydl.add_info_extractor(TwitterPhotosIE(ydl));ydl.add_info_extractor(InstagramPhotosIE(ydl));return ydl
-def probe_video(url,cookies=None):
-    with create_ydl(dict(quiet=True,no_warnings=True,noplaylist=True,skip_download=True,logger=QuietLogger(lambda e:None)),cookies) as ydl:
+def probe_video(url,cookies=None,user_agent=None):
+    options=dict(quiet=True,no_warnings=True,noplaylist=True,skip_download=True,logger=QuietLogger(lambda e:None))
+    if user_agent:options['http_headers']={'User-Agent':user_agent}
+    with create_ydl(options,cookies) as ydl:
         info=ydl.extract_info(validate_media_url(url),download=False,process=False)
     return {k:info.get(k) for k in ['id','title','channel','uploader_id','live_status']}
 
@@ -113,11 +118,34 @@ def download_photo(ydl,info,output,temp,emit):
     else:os.replace(part,final)
     return final
 
-def download_video(url,output_dir,quality='best',progress=None,*,audio_only=False,cookies=None,https_assist=False):
+def download_video(url,output_dir,quality='best',progress=None,*,audio_only=False,cookies=None,https_assist=False,user_agent=None):
     from pc_storage import OutputLock
     validate_media_url(url)
-    with OutputLock(output_dir):return _download_video(url,output_dir,quality,progress,audio_only=audio_only,cookies=cookies,https_assist=https_assist)
-def _download_video(url,output_dir,quality='best',progress=None,*,audio_only=False,cookies=None,https_assist=False):
+    with OutputLock(output_dir):return _download_video(url,output_dir,quality,progress,audio_only=audio_only,cookies=cookies,https_assist=https_assist,user_agent=user_agent)
+def verify_media(path,ffmpeg,*,audio_only=False):
+    """Verify final local bytes and a decodable stream before reporting success."""
+    from PIL import Image
+    path=Path(path)
+    if path.is_symlink() or not path.is_file() or not path.stat().st_size:raise ValueError('완료 파일이 비어 있거나 안전하지 않습니다.')
+    before=path.stat()
+    if path.suffix.lower() in {'.jpg','.jpeg','.png','.webp','.gif'}:
+        if audio_only:raise ValueError('사진에는 추출할 음원이 없습니다.')
+        with Image.open(path) as image:image.verify()
+        kind='image'
+    else:
+        kind='audio' if audio_only else 'video'
+        command=[ffmpeg,'-nostdin','-v','error','-xerror','-protocol_whitelist','file,pipe,crypto,data',
+                 '-i',str(path),'-map','0:a:0' if audio_only else '0:v:0','-t','1','-f','null','-']
+        try:r=subprocess.run(command,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=60,creationflags=subprocess.CREATE_NO_WINDOW)
+        except subprocess.TimeoutExpired:raise ValueError('완료 파일의 미디어 확인 시간이 초과됐습니다.') from None
+        if r.returncode:raise ValueError('완료 파일에서 재생 가능한 '+('음원' if audio_only else '영상')+'을 확인하지 못했습니다.')
+    with path.open('rb') as stream:digest=hashlib.file_digest(stream,'sha256').hexdigest()
+    after=path.stat()
+    if (before.st_size,before.st_mtime_ns)!=(after.st_size,after.st_mtime_ns):raise ValueError('검증 중 완료 파일이 변경됐습니다.')
+    return dict(name=path.name,bytes=after.st_size,sha256=digest,kind=kind,verification='image-format' if kind=='image' else 'first-second-decode')
+
+
+def _download_video(url,output_dir,quality='best',progress=None,*,audio_only=False,cookies=None,https_assist=False,user_agent=None):
     url=validate_media_url(url)
     if quality not in FORMAT_SELECTORS:raise ValueError('지원하지 않는 화질입니다.')
     output=Path(output_dir).expanduser().resolve();output.mkdir(parents=True,exist_ok=True)
@@ -136,12 +164,21 @@ def _download_video(url,output_dir,quality='best',progress=None,*,audio_only=Fal
         if d.get('status')=='finished':
             path=d.get('info_dict',{}).get('filepath')
             if path:files.append(path)
+    stream_mode=stream_video_url(url) is not None and not audio_only
     mode='audio' if audio_only else 'video-'+quality
     options=dict(format='bestaudio/best' if audio_only else FORMAT_SELECTORS[quality],paths=dict(home=str(output),temp=str(temp)),outtmpl={'default':f'%(title).160B [%(id)s]-{mode}.%(ext)s'},merge_output_format='mp4',ffmpeg_location=ffmpeg_path(),windowsfilenames=True,noplaylist=True,continuedl=True,overwrites=False,retries=3,fragment_retries=3,socket_timeout=25,concurrent_fragment_downloads=4,quiet=True,no_warnings=False,progress_hooks=[hook],postprocessor_hooks=[post],logger=QuietLogger(emit))
     import shutil,sys
+    if user_agent:options['http_headers']={'User-Agent':user_agent}
     node=Path(getattr(sys,'_MEIPASS',Path(__file__).parent))/'bin/node.exe'
     if node.is_file() or shutil.which('node'):options['js_runtimes']={'node':{'path':str(node) if node.is_file() else shutil.which('node')}}
     if audio_only:options['postprocessors']=[dict(key='FFmpegExtractAudio',preferredcodec='m4a',preferredquality='0')]
+    if stream_mode:
+        import certifi
+        limit='' if quality=='best' else '[height<='+quality+']'
+        options['format']='best'+limit+'[ext=mp4][vcodec!=none]/best'+limit+'[vcodec!=none]'
+        options['external_downloader']={'default':'ffmpeg'}
+        options['outtmpl']['default']=f'%(title).160B [%(id)s]-{mode}-%(format_id).30B.%(ext)s'
+        options['external_downloader_args']={'ffmpeg_i':['-loglevel','error','-tls_verify','1','-ca_file',certifi.where(),'-rw_timeout','30000000']}
     if https_assist:
         from yt_dlp.networking.impersonate import ImpersonateTarget
         options['impersonate']=ImpersonateTarget(client='chrome')
@@ -161,7 +198,32 @@ def _download_video(url,output_dir,quality='best',progress=None,*,audio_only=Fal
                 if audio_only:return
                 files.append(str(download_photo(ydl,info,output,temp,emit)))
             else:
-                done=ydl.process_ie_result(info,download=True)
+                last[0]=None;emit(dict(stage='preparing',percent=0))
+                progress_file=temp/('stream-'+uuid.uuid4().hex+'.progress')
+                stop=threading.Event();watcher=None
+                if stream_mode:
+                    tracker=StreamProgress(info.get('duration'),info.get('is_live'))
+                    options['external_downloader_args']['ffmpeg_o']=['-progress',str(progress_file),'-nostats']
+                    # YoutubeDL retains its parameter mapping, but make this explicit.
+                    ydl.params['external_downloader_args']=options['external_downloader_args']
+                    def watch():
+                        position=0
+                        while not stop.wait(.2):
+                            if not progress_file.is_file():continue
+                            try:
+                                with progress_file.open(encoding='utf-8') as reader:
+                                    reader.seek(position)
+                                    while line:=reader.readline():
+                                        if not line.endswith('\n'):break
+                                        position=reader.tell()
+                                        if event:=tracker.accept(line):emit(event)
+                            except OSError:continue
+                    watcher=threading.Thread(target=watch,daemon=True);watcher.start()
+                try:done=ydl.process_ie_result(info,download=True)
+                finally:
+                    stop.set()
+                    if watcher:watcher.join(2)
+                    progress_file.unlink(missing_ok=True)
                 candidates=[done.get('filepath'),done.get('_filename'),ydl.prepare_filename(done)]
                 candidates.extend(x.get('filepath') for x in done.get('requested_downloads',[]))
                 if audio_only:candidates.extend(str(Path(x).with_suffix('.m4a')) for x in candidates[:] if x)
@@ -171,5 +233,7 @@ def _download_video(url,output_dir,quality='best',progress=None,*,audio_only=Fal
     files=list(dict.fromkeys(str(Path(f).resolve()) for f in files if Path(f).is_file() and Path(f).stat().st_size>0 and Path(f).resolve().parent==output))
     if audio_only:files=[f for f in files if Path(f).suffix=='.m4a']
     if not files:raise RuntimeError('추출할 음원이 없거나 완료된 M4A 파일을 확인하지 못했습니다.' if audio_only else '완료된 미디어 파일을 확인하지 못했습니다.')
-    result=dict(id=root.get('id'),title=root.get('title') or '미디어',channel=root.get('channel') or root.get('uploader') or '',file=files[0],files=files)
+    emit(dict(stage='verifying',percent=99))
+    artifacts=[verify_media(f,options['ffmpeg_location'],audio_only=audio_only) for f in files]
+    result=dict(id=root.get('id'),title=root.get('title') or '미디어',channel=root.get('channel') or root.get('uploader') or '',file=files[0],files=files,artifacts=artifacts)
     emit(dict(stage='complete',percent=100,**result));return result

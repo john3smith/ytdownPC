@@ -20,13 +20,24 @@ def wifi_connected():
         if ptr:wlan.WlanFreeMemory(ptr)
         wlan.WlanCloseHandle(handle,None)
 class ProcessTree:
-    def __init__(self,command):
+    def __init__(self,command,stderr_callback=None):
         import win32job,win32api,win32con
         self.job=win32job.CreateJobObject(None,'YTDownPC-'+uuid.uuid4().hex)
         limits=win32job.QueryInformationJobObject(self.job,win32job.JobObjectExtendedLimitInformation)
         limits['BasicLimitInformation']['LimitFlags']=win32job.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
         win32job.SetInformationJobObject(self.job,win32job.JobObjectExtendedLimitInformation,limits)
-        self.process=subprocess.Popen(command,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,creationflags=subprocess.CREATE_NO_WINDOW)
+        self.process=subprocess.Popen(command,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE if stderr_callback else subprocess.DEVNULL,creationflags=subprocess.CREATE_NO_WINDOW)
+        self.stderr_thread=None
+        if stderr_callback:
+            def drain():
+                count=0
+                with self.process.stderr as stream:
+                    while line:=stream.readline(8192):
+                        if count<100:
+                            try:stderr_callback(redact(line.decode('utf-8',errors='replace').strip()))
+                            except Exception:pass
+                        count+=1
+            self.stderr_thread=threading.Thread(target=drain,daemon=True);self.stderr_thread.start()
         try:
             handle=win32api.OpenProcess(win32con.PROCESS_SET_QUOTA|win32con.PROCESS_TERMINATE,False,self.process.pid)
             try:win32job.AssignProcessToJobObject(self.job,handle)
@@ -35,7 +46,10 @@ class ProcessTree:
             self.process.kill();self.process.wait();self.job.Close();raise
     def close(self):
         if self.job:self.job.Close();self.job=None
-    def wait(self):return self.process.wait()
+    def wait(self):
+        result=self.process.wait()
+        if self.stderr_thread:self.stderr_thread.join(2)
+        return result
 class DownloadQueue:
     def __init__(self,notify=lambda e:None,network=wifi_connected):
         self.notify=notify;self.network=network;self.lock=threading.RLock();self.jobs=[];self.closed=False;self.active=None
@@ -78,14 +92,14 @@ class DownloadQueue:
         self.closed=True;self.cancel()
     def _run_item(self,job,url):
         id=uuid.uuid4().hex;request=DATA_DIR/'jobs'/f'{id}.bin';events=request.with_suffix('.events')
-        opts=job['options'];payload={k:opts[k] for k in ['quality','audio_only','cookies','https_assist'] if k in opts}
+        opts=job['options'];payload={k:opts[k] for k in ['quality','audio_only','cookies','https_assist','user_agent'] if k in opts}
         payload.update(url=url,output_dir=opts['output']);write_private(request,payload)
         exe=[sys.executable] if getattr(sys,'frozen',False) else [sys.executable,str(Path(__file__).with_name('ytdownpc.py'))]
         tree=None;result=None;error=None
         try:
             with self.lock:
                 if job['cancel']:return None
-                tree=ProcessTree(exe+['--job-file',str(request)]);self.active=(job['id'],tree)
+                tree=ProcessTree(exe+['--job-file',str(request)],stderr_callback=lambda text:self.notify(dict(stage='message',text=text,job_id=job['id'])));self.active=(job['id'],tree)
             position=0;pending=''
             while True:
                 if events.exists():
@@ -135,7 +149,7 @@ class DownloadQueue:
                     except Exception as exc:
                         job['failed_items']+=1;job['error']=redact(str(exc));self.notify(dict(stage='message',text=job['error']))
                 with self.lock:
-                    job['result']=dict(files=[f for r in results for f in r['files']],title=job['account'] or (results[0]['title'] if results else '미디어'))
+                    job['result']=dict(files=[f for r in results for f in r['files']],artifacts=[a for r in results for a in r.get('artifacts',[])],title=job['account'] or (results[0]['title'] if results else '미디어'))
                     job['status']='cancelled' if job['cancel'] else 'failed' if job['failed_items'] else 'completed'
                     if job['status']=='completed':job['progress']=100
             except Exception as exc:
