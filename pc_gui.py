@@ -10,16 +10,16 @@ from pc_storage import DATA_DIR,settings,save_settings,partial_files,update_libr
 from pc_engine import QUALITY_LABELS,validate_media_url,validate_web_url,format_bytes,redact,probe_video
 from pc_queue import DownloadQueue
 from pc_browser import Sessions,BrowserWindow,SITES,account_url
-from version_info import APP_VERSION
+from version_info import APP_NAME, APP_VERSION
 from pc_parity import extract_media_url,failure_advice
 class Signals(QObject):event=Signal(dict)
 class DownloaderApp(QMainWindow):
     def __init__(self):
-        super().__init__();self.setWindowTitle('YTDownPC v'+APP_VERSION);self.resize(940,800);self.setMinimumSize(640,480)
+        super().__init__();self.setWindowTitle(APP_NAME+' v'+APP_VERSION);self.resize(940,800);self.setMinimumSize(640,480)
         self.signals=Signals();self.signals.event.connect(self.apply_event);self.manager=DownloadQueue(self.signals.event.emit);self.sessions=Sessions(self);self.windows=[];self.logs=[];self.last_cancel=0;self.configuration=settings();self.seen_completed=set();self.setAcceptDrops(True)
         self.setStyleSheet('QMainWindow,QWidget{background:#f4f7fa;color:#182e3c;font:10pt "Malgun Gothic"} QPushButton{background:#e3ebf2;border:0;border-radius:7px;padding:9px 14px} QPushButton:hover{background:#d0e1ef} QLineEdit,QComboBox,QListWidget,QPlainTextEdit{background:white;border:1px solid #cfdae2;border-radius:5px;padding:6px} QProgressBar{border:0;background:#dae5ee;border-radius:5px;text-align:center} QProgressBar::chunk{background:#087f8c;border-radius:5px} QTabBar::tab{padding:10px 22px} QLabel#heading{font-size:25px;font-weight:bold;color:#007b85}')
         host=QWidget();self.setCentralWidget(host);layout=QVBoxLayout(host);layout.setContentsMargins(24,18,24,18);layout.setSpacing(12)
-        heading=QLabel('YTDownPC  '+APP_VERSION);heading.setObjectName('heading');layout.addWidget(heading)
+        heading=QLabel(APP_NAME+'  '+APP_VERSION);heading.setObjectName('heading');layout.addWidget(heading)
         layout.addWidget(QLabel('영상·사진·M4A 음원  |  작업별 설정 유지  |  최대 10개 대기'))
         self.tabs=QTabWidget();layout.addWidget(self.tabs,1)
         main=QWidget();body=QVBoxLayout(main);body.setSpacing(14);self.download_scroll=QScrollArea();self.download_scroll.setWidgetResizable(True);self.download_scroll.setWidget(main);self.tabs.addTab(self.download_scroll,'다운로드')
@@ -59,14 +59,14 @@ class DownloaderApp(QMainWindow):
         QApplication.clipboard().dataChanged.connect(self.clipboard_changed)
         QTimer.singleShot(0,self.clipboard_changed)
         self.timer=QTimer(self);self.timer.setInterval(500);self.timer.timeout.connect(self.refresh);self.timer.start()
-        self.tray=QSystemTrayIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowDown),self);menu=QMenu();show=menu.addAction('YTDownPC 열기');show.triggered.connect(self.reveal);exit=menu.addAction('종료');exit.triggered.connect(self.exit_app);self.tray.setContextMenu(menu);self.tray.activated.connect(lambda reason:self.reveal());self.tray.show()
+        self.tray=QSystemTrayIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowDown),self);menu=QMenu();show=menu.addAction('ytpc 열기');show.triggered.connect(self.reveal);exit=menu.addAction('종료');exit.triggered.connect(self.exit_app);self.tray.setContextMenu(menu);self.tray.activated.connect(lambda reason:self.reveal());self.tray.show()
         for site in SITES:self.sessions.profile(site)
     @staticmethod
     def button(layout,text,call):
         b=QPushButton(text);b.clicked.connect(call);layout.addWidget(b);return b
     def options(self):return dict(output=str(Path(self.output.text()).expanduser().resolve()),quality=QUALITY_LABELS[self.quality.currentText()],audio_only=self.audio.isChecked(),immediate=self.immediate.isChecked(),wifi_only=self.wifi.isChecked(),https_assist=self.assist.isChecked(),auto_update=self.auto_update.isChecked(),cookies=self.sessions.snapshot(),user_agent=self.sessions.user_agent(self.url.text()))
     def persist(self,*args):save_settings(self.options())
-    def error(self,e):QMessageBox.warning(self,'YTDownPC',redact(str(e)))
+    def error(self,e):QMessageBox.warning(self,APP_NAME,redact(str(e)))
     def add_log(self,text):
         self.logs.append(time.strftime('%H:%M:%S')+' '+redact(text));self.logs=self.logs[-200:];self.log.setPlainText('\n'.join(self.logs))
     def enqueue(self):
@@ -209,7 +209,7 @@ class DownloaderApp(QMainWindow):
         for w in self.windows[:]:w.close()
         self.tray.hide();event.accept()
 def run():
-    app=QApplication.instance() or QApplication([]);app.setApplicationName('YTDownPC');app.setOrganizationName('YTDownPC');app.setQuitOnLastWindowClosed(False)
+    app=QApplication.instance() or QApplication([]);app.setApplicationName(APP_NAME);app.setOrganizationName('YTDownPC');app.setQuitOnLastWindowClosed(False)
     window=DownloaderApp();window.show();app.aboutToQuit.connect(window.manager.close);window.destroyed.connect(app.quit)
     # Closing the main window cancels work and exits; hiding it keeps the tray alive.
     original=window.closeEvent

@@ -61,7 +61,7 @@ class BrowserWindow(QMainWindow):
     scanFailed=Signal(str)
     def __init__(self,sessions,site,url,*,scan=False,parent=None):
         super().__init__(parent);self.setAttribute(__import__('PySide6.QtCore',fromlist=['Qt']).Qt.WidgetAttribute.WA_DeleteOnClose)
-        self.setWindowTitle('YTDownPC · '+('계정 미디어 검색' if scan else '현재 웹페이지 / 로그인'));self.resize(1050,780)
+        self.setWindowTitle('ytpc · '+('계정 미디어 검색' if scan else '현재 웹페이지 / 로그인'));self.resize(1050,780)
         self.site=site;self.scan=scan;self.done=False;self.scanning=False;self.started=0;self.stable=0;self.signature=None;self.pages={};self.phase='posts'
         self.view=QWebEngineView();self.page=SecurePage(sessions.profile(site),self.view);self.view.setPage(self.page);self.setCentralWidget(self.view)
         self.page.certificateError.connect(lambda e:e.rejectCertificate())
