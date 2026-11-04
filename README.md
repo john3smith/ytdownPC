@@ -1,4 +1,4 @@
-# YTDownPC 1.2.0
+# ytpc 1.2.1
 
 Windows에서 YouTube·X·Instagram 영상, 사진, M4A 음원을 저장합니다. Android [YTDown](https://github.com/john3smith/ytdownForAND)의 다운로드·대기열·로그인 기능을 PC UI에 맞춰 추가했습니다.
 
@@ -12,7 +12,7 @@ Windows에서 YouTube·X·Instagram 영상, 사진, M4A 음원을 저장합니�
 - 완료 파일은 이미지 형식 또는 영상/음원의 첫 1초 디코딩과 SHA-256을 확인한 뒤 100%로 표시합니다. 이는 전체 영상의 모든 프레임·전체 재생 검증은 아닙니다. 검증 결과는 CLI/MCP 결과의 `artifacts`에 포함됩니다.
 - 인증서·401/403·404·시간 초과·연결 강제 종료·FFmpeg 종료 원인별 안내와 민감정보를 제외한 FFmpeg 오류를 표시합니다.
 
-소스/로컬 빌드 후보 버전은 1.2.0입니다. 새 EXE 배포는 [기존 Windows 서명 절차](docs/WINDOWS_SIGNING.md)를 통과해야 하며, 버전 변경만으로 서명/배포 완료를 뜻하지 않습니다. 기존 공개 바이너리는 [1.1.0 Release](https://github.com/john3smith/ytdownPC/releases/tag/v1.1.0)입니다.
+소스/로컬 빌드 후보 버전은 1.2.1입니다. 새 EXE 배포는 [기존 Windows 서명 절차](docs/WINDOWS_SIGNING.md)를 통과해야 하며, 버전 변경만으로 서명/배포 완료를 뜻하지 않습니다. 기존 공개 바이너리는 [1.2.0 Release](https://github.com/john3smith/ytdownPC/releases/tag/v1.2.0)입니다.
 
 - [GitHub Releases](https://github.com/john3smith/ytdownPC/releases): Windows portable ZIP
 - [HTML 사용 설명서](docs/user-guide.html)
@@ -20,7 +20,7 @@ Windows에서 YouTube·X·Instagram 영상, 사진, M4A 음원을 저장합니�
 
 ## 설치
 
-버전별 portable ZIP 전체를 새 폴더에 풀고 `YTDownPC-v1.2.0.exe`를 실행하세요. EXE와 `_internal` 폴더를 함께 유지합니다. Qt 라이브러리를 교체 가능한 별도 파일로 제공하므로 EXE 하나만 옮겨서는 실행되지 않습니다. 이전 버전과 다운로드 파일을 지우지 않아도 됩니다.
+버전별 portable ZIP 전체를 새 폴더에 풀고 `ytpc-v1.2.1.exe`를 실행하세요. EXE와 `_internal` 폴더를 함께 유지합니다. Qt 라이브러리를 교체 가능한 별도 파일로 제공하므로 EXE 하나만 옮겨서는 실행되지 않습니다. 이전 버전과 다운로드 파일을 지우지 않아도 됩니다.
 
 처음 다운로드할 때 인터넷이 필요합니다. 최신 stable yt-dlp는 공식 GitHub Release에서 SHA-256 검증 후 준비합니다. 설치된 FFmpeg가 없으면 원본 imageio-ffmpeg 0.6.0 Windows wheel을 PyPI에서 SHA-256 검증 후 내려받아 사용자 PC에 준비합니다. 배포 ZIP에는 FFmpeg를 재포장하지 않습니다. 업데이트 확인 실패 시 검증된 기존 yt-dlp를 사용하며, FFmpeg 준비 실패는 오류로 표시합니다.
 
@@ -85,9 +85,9 @@ MCP는 브라우저 UI 없이 공개 자료 기준으로 동작합니다. GUI와
 
 ## 검증 범위
 
-2026-10-31의 1.2.0 검증: 기능/MCP/Qt UI 36개와 서명 정책 10개 검사를 통과했습니다. 합성 영상으로 실제 HTTP 영상 저장·M4A 추출·테스트 CA를 명시한 HTTPS FFmpeg 저장/진행률·재요청·변조 파일 거부를 확인했습니다. 테스트 인증서를 시스템에 설치하거나 인증서 검증을 끄지 않았습니다. 실제 YouTube의 Blender Sintel 영상 720p MP4(55,231,352 bytes)와 M4A(45,794,395 bytes)를 새로 저장하고 미디어 확인·SHA-256 검증을 완료했습니다. UI는 940×800, 640×480 및 글자 1.3배에서 확인했습니다.
+2026-10-31의 1.2.1 검증: 기능/MCP/Qt UI 36개와 서명 정책 10개 검사를 통과했습니다. 합성 영상으로 실제 HTTP 영상 저장·M4A 추출·테스트 CA를 명시한 HTTPS FFmpeg 저장/진행률·재요청·변조 파일 거부를 확인했습니다. 테스트 인증서를 시스템에 설치하거나 인증서 검증을 끄지 않았습니다. 실제 YouTube의 Blender Sintel 영상 720p MP4(55,231,352 bytes)와 M4A(45,794,395 bytes)를 새로 저장하고 미디어 확인·SHA-256 검증을 완료했습니다. UI는 940×800, 640×480 및 글자 1.3배에서 확인했습니다.
 
-추가 사이트의 실제 로그인/다운로드, X·Instagram 실제 로그인 계정 전체 수집은 이번 검증에 포함하지 않았습니다. Android의 공유 인텐트·MediaStore·절전 서비스·전용 TLS 릴레이는 Windows 대응 흐름을 사용합니다. [1.2.0 비교·검증 기록](docs/ANDROID-PARITY-1.2.0.md)을 참고하세요.
+추가 사이트의 실제 로그인/다운로드, X·Instagram 실제 로그인 계정 전체 수집은 이번 검증에 포함하지 않았습니다. Android의 공유 인텐트·MediaStore·절전 서비스·전용 TLS 릴레이는 Windows 대응 흐름을 사용합니다. [1.2.1 비교·검증 기록](docs/ANDROID-PARITY-1.2.1.md)을 참고하세요.
 
 2026-10-21 개발 환경에서 공개 YouTube의 Blender Sintel 영상으로 720p MP4 병합과 M4A 음원 저장을 실제 완료했습니다. 사진은 합성 원본 바이트·이미지 형식 검증과 X/Instagram 추출기 fixture로 확인했습니다. 대기열 순서/설정 스냅샷/Wi-Fi 대기/계정 예약/부분 실패/취소 프로세스 트리/보수적 임시 파일 정리/URL 경계/DPAPI/MCP를 자동 검사합니다.
 
@@ -104,4 +104,4 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m PyInstaller --noconfirm --clean YTDownPC.spec
 ```
 
-빌드에는 Windows x64, Python3.12, Node.js가 필요합니다. spec은 프로젝트 상대 경로를 사용합니다. 결과는 `dist/YTDownPC-v1.2.0/`이며 폴더 전체를 배포합니다. Qt/PySide와 Node 등 외부 구성요소 버전·라이선스 고지를 보존해야 합니다. 비밀번호·브라우저 프로필·다운로드·로그·테스트 결과는 Git/배포에 포함하지 않습니다.
+빌드에는 Windows x64, Python3.12, Node.js가 필요합니다. spec은 프로젝트 상대 경로를 사용합니다. 결과는 `dist/ytpc-v1.2.1/`이며 폴더 전체를 배포합니다. Qt/PySide와 Node 등 외부 구성요소 버전·라이선스 고지를 보존해야 합니다. 비밀번호·브라우저 프로필·다운로드·로그·테스트 결과는 Git/배포에 포함하지 않습니다.

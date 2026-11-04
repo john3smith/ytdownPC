@@ -3,7 +3,7 @@ from pathlib import Path
 import shutil
 from PyInstaller.utils.hooks import collect_all
 root=Path(SPECPATH);version={};exec((root/'version_info.py').read_text('utf-8'),version)
-name=f"YTDownPC-v{version['APP_VERSION']}"
+name=f"{version['APP_NAME']}-v{version['APP_VERSION']}"
 datas=[(str(root/'account_capture.js'),'.'),(str(root/'docs'),'docs'),(str(root/'THIRD_PARTY_NOTICES.md'),'.'),(str(root/'README.txt'),'.')];binaries=[];hiddenimports=[]
 for package in ['yt_dlp','yt_dlp_ejs','curl_cffi']:
     d,b,h=collect_all(package);datas+=d;binaries+=b;hiddenimports+=h
